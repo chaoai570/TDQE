@@ -1,4 +1,7 @@
-distilgpt2/
+my_model/
 archive/
 *.xlsx
+*.csv
 .ipynb_checkpoints/
+__pycache__/
+*.pyc

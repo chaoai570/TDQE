@@ -1,60 +1,110 @@
-\# TDQE: 文本数据质量评估方法 (复旦大学论文像素级复现)
+# TDQE: 文本数据质量评估方法
 
+论文 "[TDQE: 一种面向深度学习的文本数据质量评估方法](https://www.infocomm-journal.com/bdr/CN/10.11959/j.issn.2096-0271.2025073)" 的 PyTorch 复现。
 
+**作者:** 罗春旭, 熊海旭, 叶雅珍, 丁滟, 宗世泽, 熊贇, 朱扬勇 (复旦大学 & 国防科技大学)
 
-\[cite\_start]本仓库实现了复旦大学发表的论文《TDQE: 一种面向深度学习的文本数据质量评估方法》的核心算法框架 \[cite: 3]\[cite\_start]。本框架无须重复训练模型 \[cite: 88, 182]\[cite\_start]，利用语言模型的 Dropout 机制捕获文本的语义一致性以评估\*\*鲁棒性\*\* \[cite: 9, 25]\[cite\_start]；同时利用文本与其自动生成的摘要之间的匹配度来评估\*\*准确性\*\* \[cite: 9, 26]\[cite\_start]。两者加权融合得到最终的数据质量分数，用于筛选和清洗低质量文本数据 \[cite: 9, 35, 41]。
+---
 
+## 方法概述
 
+TDQE 通过两个维度评估文本数据被语言模型理解的程度：
 
-\---
+### 1. 语义一致性检测 — 鲁棒性 R(V(T)) [Section 2.1]
 
+利用文本摘要生成模型的 Dropout 生成 m = 3 个随机子网络，提取多个嵌入表示 {v₁, v₂, ..., vₘ}，通过嵌入向量间的平均欧氏距离衡量鲁棒性：
 
+$$\displaystyle R(V(T)) = \sigma\left(-\frac{2}{m(m-1)}\sum_{i<j} d(v_i, v_j)\right)$$
 
-\## 📂 仓库项目结构 (Repository Structure)
+其中 d(·,·) 为欧氏距离，σ(·) 为 Sigmoid 函数，确保 R ∈ [0, 0.5]。
 
+### 2. 匹配度检测 — 准确性 M(T,S) [Section 2.2]
 
+利用文本相似匹配模型计算数据样本 T 与其模型生成的摘要 S 之间的匹配度，评估模型理解的准确程度。M(T,S) ∈ [0, 0.5]。
 
-别的主机克隆本仓库后，项目目录应保持如下结构：
+### 3. 质量评估 Q(T) [Section 2.3]
 
-```text
+$$\displaystyle Q(T) = R(V(T)) + M(T, S)$$
 
-TDQE-Project/
+Q(T) ∈ [0, 1.0]，分数越高表示文本越适合用于语言模型训练。
 
-├── .gitignore                   # 自动忽略大文件（模型和数据集）的上传
+---
 
-├── requirements.txt             # 环境依赖工具包清单
+## 实验验证 [Section 3]
 
-├── TDQE\_All\_In\_One.ipynb        # 核心复现代码（包含完整流水线）
+- **数据集:** 20 Newsgroups (20 类, ~19,000 篇文章)
+- **划分:** 8:2 train/test
+- **分类器参数 (Table 1):** epochs=10, batch=8, lr=0.01, Leaky-ReLU, max_len=512
+- **实验类型:** 删除低质量数据、删除高质量数据、消融实验
 
-├── README.md                    # 本说明文档
+---
 
-├── my\_model/                    # 【需自行放置】离线大模型权重文件夹
+## 项目结构
 
-└── archive/                     # 【需自行放置】解压后的 20NG 官方大文本数据集文件夹
+```
+TDQE_Github/
+├── tdqe/                     # 核心 Python 包
+│   ├── __init__.py           # 公共接口
+│   ├── config.py             # 论文参数常量
+│   ├── robustness.py         # 语义一致性检测 (Section 2.1)
+│   ├── accuracy.py           # 匹配度检测 (Section 2.2)
+│   ├── quality.py            # 质量分数聚合 (Section 2.3)
+│   ├── data.py               # 20NG 数据集加载 (Section 3.1)
+│   └── experiment.py         # 分类器验证实验 (Section 3)
+├── TDQE_All_In_One.ipynb     # 完整流水线 Notebook
+├── requirements.txt
+├── my_model/                 # 【需自行放置】离线模型权重
+├── archive/                  # 【需自行放置】20NG 数据集
+└── README.md
+```
 
-🚀 别的主机如何一键无缝运行？ (Quick Start)
+---
 
-1\. 克隆本仓库并进入工作目录
+## 快速开始
 
-在你的全新主机终端中执行：
+### 1. 安装依赖
 
-git clone <你的GitHub仓库链接>
-
-cd TDQE-Project
-
-2\. 一键安装全套 Python 环境依赖
-
-本项目的核心算法已完全封装。请确保你本地安装了 Anaconda 或 Python 环境，然后在终端执行以下命令，全自动补齐所有工具包：
-
+```bash
 pip install -r requirements.txt
+```
 
-3\. 搬运大物资 (本地离线数据与模型准备)由于 GitHub 单文件大小限制，大模型文件与数据集已通过 .gitignore 排除在外，需要手动放置到项目根目录下：放置离线大模型：将下载好的模型文件夹原封不动地复制到项目根目录下，并重命名为 my\_model。确保该文件夹下直接包含 model.safetensors、config.json 等权重文件。放置官方数据集：从 Kaggle 下载 20 Newsgroups (20NG) 官方合并版大文本数据集。在项目根目录下新建一个名为 archive 的文件夹，将 20 个巨型 .txt 文件（如 sci.space.txt 等）全部解压放进去 。  
+### 2. 准备模型和数据
 
-4\. 轰鸣启动
+- 将预训练模型（如 distilgpt2）放入 `my_model/` 目录
+- 将 20 Newsgroups 数据集的 20 个 `.txt` 文件放入 `archive/` 目录
 
-打开 Jupyter Notebook，直接点击运行 TDQE\_All\_In\_One.ipynb。
+### 3. 运行
 
-由于代码内部已完全重构为通用相对路径 (./my\_model 与 ./archive)，新主机不需要修改任何一行代码的路径，直接从头到尾按下 Shift + Enter 即可完美一键跑通
+```bash
+jupyter notebook TDQE_All_In_One.ipynb
+```
 
-📊 论文核心实验对齐说明 (Experiment Alignment)输入限制：严格对齐论文表 1 参数设置，输入最大长度锁死为 512 个 Token，完美适配预训练模型的位置编码限制 。  鲁棒性评估：严格遵循论文公式（1），激活模型 Dropout 重复前向传播 $m=3$ 次计算随机子网络的平均欧氏距离 。  准确性评估：利用大模型自动生成文本摘要，全自动净化停用词噪声，精准计算原文与摘要的词频交集匹配度 。  数据排雷：代码内置工业级 ASCII 净化过滤器，全自动滤除原始文本中会导致 Excel 导出崩溃的低位控制字符，确保近 4 万条全量数据长跑一路绿灯。数据切分：模型打分完毕后，会自动导出带全局排序的 Excel 终极报告 。后续如需进行分类器验证，可直接使用代码库中的标准接口，严格按照论文 3.1 节进行 8:2 的训练集与测试集科学划分 。  
+按顺序执行所有 Cell 即可完成：
+1. 加载模型和数据集
+2. 计算 TDQE 质量分数
+3. 训练分类器并运行数据删除/消融实验
 
+---
+
+## 与论文的对应关系
+
+| 代码模块 | 论文章节 | 说明 |
+|---|---|---|
+| `tdqe/robustness.py` | Section 2.1 | Formula (1): Dropout m=3 次前向传播，欧氏距离均值 |
+| `tdqe/accuracy.py` | Section 2.2 | 文本-摘要嵌入余弦相似度，缩放到 [0, 0.5] |
+| `tdqe/quality.py` | Section 2.3 | Formula (2): Q(T) = R + M |
+| `tdqe/data.py` | Section 3.1 | 20NG 数据集, 8:2 划分 |
+| `tdqe/experiment.py` | Section 3.3–3.5 | 数据删除实验、消融实验 |
+| `tdqe/config.py` | Table 1 | m=3, max_len=512, epochs=10, batch=8, lr=0.01 |
+
+## 参考文献
+
+[1] Longpre S, et al. A pretrainer's guide to training data. NAACL, 2024.
+[2] Ferdowsi H, et al. An online outlier identification and removal scheme. IEEE TNNLS, 2014.
+[3] Frénay B, Verleysen M. Classification in the presence of label noise. IEEE TNNLS, 2014.
+[5] Schoch S, et al. CS-SHAPLEY. NeurIPS, 2022.
+[6] Ghorbani A, Zou J. Data Shapley. ICML, 2019.
+[7] Yoon J, et al. DVRL. ICML, 2020.
+[9] Srivastava N, et al. Dropout. JMLR, 2014.
+[16] Devlin J, et al. BERT. NAACL, 2019.
+[19] 20 Newsgroups dataset.
