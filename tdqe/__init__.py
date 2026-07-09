@@ -1,17 +1,16 @@
 """
-TDQE: Text Data Quality Evaluation
-===================================
+TDQE: 文本数据质量评估 —— 论文完整复现。
 
-Paper: "TDQE: 一种面向深度学习的文本数据质量评估方法"
-       Luo Chunxu, Xiong Haixu, Ye Yazhen, Ding Yan, Zong Shize, Xiong Yun, Zhu Yangyong
-       Fudan University & National University of Defense Technology
+论文: "TDQE: 一种面向深度学习的文本数据质量评估方法"
+      罗春旭, 熊海旭, 叶雅珍, 丁滟, 宗世泽, 熊贇, 朱扬勇
+      复旦大学 & 国防科技大学
 
-Reference implementation of the TDQE framework consisting of:
-    - Semantic Consistency Detection (Section 2.1)  →  robustness.py
-    - Matching Degree Detection       (Section 2.2)  →  accuracy.py
-    - Quality Score Aggregation       (Section 2.3)  →  quality.py
-    - 20NG Dataset Loader             (Section 3.1)  →  data.py
-    - Classifier Validation           (Section 3)    →  experiment.py
+包含以下模块:
+    - 语义一致性检测 (Section 2.1)  →  robustness.py
+    - 匹配度检测       (Section 2.2)  →  accuracy.py
+    - 质量分数聚合     (Section 2.3)  →  quality.py
+    - 20NG 数据集加载  (Section 3.1)  →  data.py
+    - 分类器验证实验   (Section 3)    →  experiment.py
 """
 
 from .config import (

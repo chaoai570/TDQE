@@ -1,21 +1,21 @@
 """
-Classifier Validation Experiments (Section 3)
-===============================================
+分类器验证实验模块 (论文 Section 3)
+=================================
 
-Implements the paper's experimental pipeline:
+按论文 Table 1 参数训练多标签文本分类器，进行以下实验:
 
-    1. Train a multi-label text classifier with parameters from Table 1.
-    2. Evaluate by deleting low-quality data (Section 3.3, 3.4).
-    3. Evaluate by deleting high-quality data.
-    4. Ablation study: robustness-only vs accuracy-only (Section 3.5).
+    1. 训练基线分类器
+    2. 删除低质量数据实验 (Section 3.3, 3.4)
+    3. 删除高质量数据实验 (Section 3.3, 3.4)
+    4. 消融实验: 仅鲁棒性 vs. 仅准确性 vs. 组合 TDQE (Section 3.5)
 
-Table 1 parameters:
-    - Output feature dim: 768
-    - Input max length: 512
-    - Training epochs: 10
-    - Batch size: 8
-    - Learning rate: 0.01
-    - Activation: Leaky-ReLU
+Table 1 参数:
+    - 输出特征维度: 768
+    - 输入最大长度: 512
+    - 训练轮次: 10
+    - 批大小: 8
+    - 学习率: 0.01
+    - 激活函数: Leaky-ReLU
 """
 
 from typing import List, Tuple, Optional
@@ -38,15 +38,15 @@ from .config import (
 
 class TDQEClassifier(nn.Module):
     """
-    Simple multi-label text classifier.
+    多标签文本分类器。
 
-    Uses mean-pooled embeddings from a pre-trained encoder followed
-    by a classifier head with Leaky-ReLU activation, matching Table 1.
+    使用预训练编码器的均值池化嵌入，后接 Leaky-ReLU 激活的
+    分类头，与 Table 1 参数一致。
     """
 
     def __init__(self, encoder, hidden_size: int = HIDDEN_SIZE, num_classes: int = NUM_CLASSES):
         super().__init__()
-        self.encoder = encoder  # pre-trained transformer (GPT-2)
+        self.encoder = encoder  # 预训练 transformer（如 GPT-2）
         self.classifier = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
             nn.LeakyReLU(),
@@ -55,13 +55,12 @@ class TDQEClassifier(nn.Module):
         )
 
     def forward(self, input_ids, attention_mask):
-        # Use the transformer encoder to get hidden states
         outputs = self.encoder(
             input_ids=input_ids,
             attention_mask=attention_mask,
             output_hidden_states=True,
         )
-        # Mean pool the last hidden state
+        # 对最后一层隐藏状态做均值池化
         last_hidden = outputs.hidden_states[-1]                          # (B, L, H)
         pooled = (last_hidden * attention_mask.unsqueeze(-1)).sum(dim=1) # (B, H)
         pooled = pooled / attention_mask.sum(dim=1, keepdim=True).clamp(min=1)
@@ -70,7 +69,7 @@ class TDQEClassifier(nn.Module):
 
 
 def _tokenize_batch(tokenizer, texts: List[str], device: str):
-    """Tokenize a list of texts and return (input_ids, attention_mask)."""
+    """将文本列表分词，返回 (input_ids, attention_mask)。"""
     enc = tokenizer(
         texts,
         max_length=MAX_INPUT_LENGTH,
@@ -94,23 +93,15 @@ def train_classifier(
     lr: float = LEARNING_RATE,
 ) -> Tuple[TDQEClassifier, float, float]:
     """
-    Train a classifier using parameters from Table 1 and return
-    test-set precision and recall (P, R).
+    按 Table 1 参数训练分类器，返回测试集上的准确率 (P) 和召回率 (R)。
     """
-    # Build classifier
     clf = TDQEClassifier(model).to(device)
     optimizer = torch.optim.Adam(clf.classifier.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
 
-    # Tokenize test set once
-    test_input_ids, test_attention_mask = _tokenize_batch(tokenizer, test_texts, device)
-    test_labels_t = torch.tensor(test_labels, dtype=torch.long).to(device)
-
     for epoch in range(num_epochs):
         clf.train()
-        # Shuffle training data each epoch
         indices = np.random.permutation(len(train_texts))
-        total_loss = 0.0
 
         for i in range(0, len(train_texts), batch_size):
             batch_idx = indices[i : i + batch_size]
@@ -126,12 +117,8 @@ def train_classifier(
             loss = criterion(logits, batch_labels)
             loss.backward()
             optimizer.step()
-            total_loss += loss.item()
 
-    # Final evaluation
-    return evaluate_classifier(
-        clf, tokenizer, test_texts, test_labels, device
-    )
+    return evaluate_classifier(clf, tokenizer, test_texts, test_labels, device)
 
 
 def evaluate_classifier(
@@ -141,19 +128,16 @@ def evaluate_classifier(
     test_labels: List[int],
     device: str = "cpu",
 ) -> Tuple[float, float]:
-    """
-    Evaluate classifier and return (precision, recall) on test set.
-    """
+    """评估分类器，返回测试集 (准确率, 召回率)。"""
     clf.eval()
     test_input_ids, test_attention_mask = _tokenize_batch(tokenizer, test_texts, device)
-    test_labels_t = torch.tensor(test_labels, dtype=torch.long).to(device)
 
-    batch_size = 32
+    eval_batch = 32
     all_preds = []
     with torch.no_grad():
-        for i in range(0, len(test_texts), batch_size):
-            batch_ids = test_input_ids[i : i + batch_size]
-            batch_mask = test_attention_mask[i : i + batch_size]
+        for i in range(0, len(test_texts), eval_batch):
+            batch_ids = test_input_ids[i : i + eval_batch]
+            batch_mask = test_attention_mask[i : i + eval_batch]
             logits = clf(batch_ids, batch_mask)
             preds = logits.argmax(dim=1).cpu().numpy()
             all_preds.extend(preds.tolist())
@@ -176,28 +160,27 @@ def run_data_removal_experiment(
     device: str = "cpu",
 ) -> List[Tuple[float, float]]:
     """
-    Run a data removal experiment (Sections 3.3, 3.4).
+    数据删除实验 (Section 3.3, 3.4)。
 
-    Sorts training data by quality score, removes a fraction (either
-    lowest or highest), trains a classifier on the remaining data,
-    and records (precision, recall).
+    按质量分数排序训练数据，删除一定比例（最低分或最高分），
+    用剩余数据重新训练分类器，记录 (准确率, 召回率)。
 
     Parameters
     ----------
     remove_low : bool
-        True  → remove lowest-quality data  (Fig 2, Fig 4, Fig 6)
-        False → remove highest-quality data (Fig 3, Fig 5)
+        True  → 删除低质量数据  (Fig 2, Fig 4, Fig 6)
+        False → 删除高质量数据  (Fig 3, Fig 5)
 
     Returns
     -------
     List[Tuple[float, float]]
-        (precision, recall) for each removal fraction.
+        每个删除比例对应的 (准确率, 召回率)。
     """
     n = len(train_texts)
-    sorted_idx = np.argsort(quality_scores)  # ascending: low → high
+    sorted_idx = np.argsort(quality_scores)  # 升序: 低 → 高
 
     if not remove_low:
-        sorted_idx = sorted_idx[::-1]  # descending: high → low
+        sorted_idx = sorted_idx[::-1]  # 降序: 高 → 低
 
     results = []
     for frac in removal_fractions:
@@ -207,7 +190,7 @@ def run_data_removal_experiment(
         subset_texts = [train_texts[i] for i in keep_idx]
         subset_labels = [train_labels[i] for i in keep_idx]
 
-        print(f"    Removal fraction={frac:.0%}: {len(subset_texts)} samples remaining")
+        print(f"    删除比例 = {frac:.0%}: 剩余 {len(subset_texts)} 条样本")
         p, r = train_classifier(
             model, tokenizer,
             subset_texts, subset_labels,
@@ -215,7 +198,7 @@ def run_data_removal_experiment(
             device=device,
         )
         results.append((p, r))
-        print(f"      P={p:.4f}, R={r:.4f}")
+        print(f"      准确率 P = {p:.4f}, 召回率 R = {r:.4f}")
 
     return results
 
@@ -233,33 +216,32 @@ def run_ablation_experiment(
     device: str = "cpu",
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
     """
-    Run ablation experiment (Section 3.5, Figure 7).
+    消融实验 (Section 3.5, Figure 7)。
 
-    Compares three scoring strategies by removing low-quality data:
-        - Robustness-only: sort by R(V(T))
-        - Accuracy-only:   sort by M(T, S)
-        - Combined:        sort by Q(T) = R + M
+    对比三种评分策略:
+        - 仅鲁棒性: 按 R(V(T)) 排序
+        - 仅准确性: 按 M(T, S) 排序
+        - 组合 (TDQE): 按 Q(T) = R + M 排序
 
     Returns
     -------
-    (robustness_results, accuracy_results, combined_results)
+    (仅鲁棒性结果, 仅准确性结果, 组合结果)
     """
-    n = len(train_texts)
     q_scores = [r + a for r, a in zip(robustness_scores, accuracy_scores)]
 
-    print("  --- Robustness-only ---")
+    print("  --- 仅鲁棒性 ---")
     r_results = run_data_removal_experiment(
         model, tokenizer, train_texts, train_labels, test_texts, test_labels,
         robustness_scores, removal_fractions, remove_low=True, device=device,
     )
 
-    print("  --- Accuracy-only ---")
+    print("  --- 仅准确性 ---")
     a_results = run_data_removal_experiment(
         model, tokenizer, train_texts, train_labels, test_texts, test_labels,
         accuracy_scores, removal_fractions, remove_low=True, device=device,
     )
 
-    print("  --- Combined (TDQE) ---")
+    print("  --- 组合 (TDQE) ---")
     q_results = run_data_removal_experiment(
         model, tokenizer, train_texts, train_labels, test_texts, test_labels,
         q_scores, removal_fractions, remove_low=True, device=device,

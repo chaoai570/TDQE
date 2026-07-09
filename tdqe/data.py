@@ -1,10 +1,10 @@
 """
-Dataset loader for the 20 Newsgroups (20NG) dataset.
+20 Newsgroups (20NG) 数据集加载模块。
 
-Follows the paper's Section 3.1:
-    - 20 categories, ~19 000 news articles
-    - Average length: 266 words; max: 10 334 words
-    - Train/test split: 8:2
+按论文 Section 3.1:
+    - 20 个类别，约 19,000 篇新闻文章
+    - 平均长度: 266 词；最长: 10,334 词
+    - 训练/测试划分: 8:2
 """
 
 import os
@@ -18,7 +18,7 @@ from torch.utils.data import Dataset
 from .config import TRAIN_SPLIT, RANDOM_SEED, MAX_INPUT_LENGTH
 
 
-# ── 20 Newsgroups category names ───────────────────────────────
+# ── 20 Newsgroups 类别名称 ─────────────────────────────────
 CATEGORIES = [
     "alt.atheism", "comp.graphics", "comp.os.ms-windows.misc",
     "comp.sys.ibm.pc.hardware", "comp.sys.mac.hardware", "comp.windows.x",
@@ -31,18 +31,16 @@ CATEGORIES = [
 
 def _extract_articles(file_path: str) -> List[str]:
     """
-    Extract individual news articles from a 20NG text file.
+    从单个 20NG 文本文件中提取每篇文章。
 
-    Articles are separated by ``\\nNewsgroup:``. Some FAQ or long-form
-    posts reference inline ``Newsgroup:`` lines which the splitter
-    would fragment. We check lengths — split fragments shorter than
-    30 words are merged back into the preceding article so FAQ posts
-    (like ``alt.atheism`` FAQ) stay as one coherent unit.
+    文章由 ``\\nNewsgroup:`` 分隔。有些 FAQ 或长文章内部会引用
+    ``Newsgroup:`` 行，这些引用的片段很短（< 30 词），会被合并回
+    前一篇完整文章，以保持 FAQ 类文章不被切碎。
     """
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         content = f.read()
 
-    # Split on article boundary marker
+    # 按文章边界标记 "\nNewsgroup:" 切分
     parts = ("\n" + content).split("\nNewsgroup:")
 
     raw = []
@@ -54,38 +52,36 @@ def _extract_articles(file_path: str) -> List[str]:
             art = "Newsgroup:" + art
         raw.append(art)
 
-    # Merge tiny fragments back — they are inline ``Newsgroup:``
-    # references inside a longer article, not real article boundaries.
+    # 将过短的碎片合并回前一篇文章（它们是文章内部的引用）
     articles = []
     for art in raw:
         wc = len(art.split())
         if wc < 30 and articles:
-            # Merge into previous article
             articles[-1] = articles[-1] + "\n" + art
         else:
             articles.append(art)
 
-    # Final length filter
+    # 最终过滤掉过短的文章
     return [a for a in articles if len(a) >= 100]
 
 
 def load_20ng(data_dir: str) -> Tuple[List[str], List[int], List[str]]:
     """
-    Load the full 20 Newsgroups dataset.
+    加载完整 20 Newsgroups 数据集。
 
     Parameters
     ----------
     data_dir : str
-        Path to the ``archive/`` directory containing the 20 ``.txt`` files.
+        ``archive/`` 目录路径，目录下应有 20 个 ``.txt`` 文件。
 
     Returns
     -------
     texts : List[str]
-        Full text content of each article.
+        每篇文章的完整文本。
     labels : List[int]
-        Integer label (0–19) for each article.
+        每篇文章的整数标签 (0–19)。
     categories : List[str]
-        Category name for each article.
+        每篇文章的类别名称。
     """
     texts: List[str] = []
     labels: List[int] = []
@@ -94,7 +90,7 @@ def load_20ng(data_dir: str) -> Tuple[List[str], List[int], List[str]]:
     for label_idx, cat in enumerate(CATEGORIES):
         file_path = os.path.join(data_dir, f"{cat}.txt")
         if not os.path.exists(file_path):
-            print(f"  ⚠  Skipping missing file: {file_path}")
+            print(f"  跳过缺失文件: {file_path}")
             continue
 
         articles = _extract_articles(file_path)
@@ -111,11 +107,11 @@ def split_dataset(
     labels: List[int],
 ) -> Tuple[List[str], List[int], List[str], List[int]]:
     """
-    Split into train/test sets at 8:2 ratio (per Section 3.1).
+    按 8:2 比例划分训练集和测试集（按论文 Section 3.1）。
 
     Returns
     -------
-    (train_texts, train_labels, test_texts, test_labels)
+    (训练文本, 训练标签, 测试文本, 测试标签)
     """
     rng = np.random.RandomState(RANDOM_SEED)
     n = len(texts)
@@ -135,8 +131,8 @@ def split_dataset(
 
 class TDQEDataset(Dataset):
     """
-    PyTorch Dataset wrapping tokenized texts and labels for classifier
-    training (Section 3.1).
+    PyTorch Dataset，用于分类器训练 (Section 3.1)。
+    将文本分词并打包为 (input_ids, attention_mask, label)。
     """
 
     def __init__(self, texts: List[str], labels: List[int], tokenizer):

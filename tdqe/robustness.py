@@ -1,16 +1,16 @@
 """
-Semantic Consistency Detection Module (Section 2.1)
-=====================================================
+语义一致性检测模块 (论文 Section 2.1)
+====================================
 
-Computes the **robustness** score R(V(T)) using Formula (1):
+用公式 (1) 计算鲁棒性分数 R(V(T)):
 
-    R(V(T)) = σ( − 2 / (m(m−1)) * Σ_{i<j} d(v_i, v_j) )
+    R(V(T)) = σ( − 2 / (m(m−1)) × Σ_{i<j} d(v_i, v_j) )
 
-where:
-    - m   = number of stochastic forward passes (Dropout sub-networks)
-    - v_i = embedding vector from the i-th stochastic sub-network
-    - d(·,·) = Euclidean distance
-    - σ(·)   = sigmoid, ensuring R ∈ [0, 0.5]
+其中:
+    - m   = 随机前向传播次数（每次 Dropout 生成不同子网络）
+    - v_i = 第 i 个随机子网络输出的嵌入向量
+    - d(·,·) = 欧氏距离
+    - σ(·)   = Sigmoid 函数，确保 R ∈ [0, 0.5]
 """
 
 import numpy as np
@@ -21,11 +21,9 @@ from .config import NUM_DROPOUT_PASSES
 
 def _extract_embedding(model, tokenizer, text: str, device: str) -> np.ndarray:
     """
-    Run a single forward pass through the model's encoder and extract
-    the mean-pooled hidden-state embedding of the input text.
+    对输入文本做一次前向传播，提取最后一层隐藏状态的均值池化嵌入向量。
 
-    The model is kept in **train** mode so Dropout is active, producing
-    a unique stochastic sub-network on each call.
+    模型处于 train() 模式，因此 Dropout 会激活，每次调用产生不同的随机子网络。
     """
     inputs = tokenizer(
         text,
@@ -39,8 +37,8 @@ def _extract_embedding(model, tokenizer, text: str, device: str) -> np.ndarray:
 
     with torch.no_grad():
         outputs = model(**inputs, output_hidden_states=True)
-        # Mean-pool the last hidden state over the token dimension
-        hidden = outputs.hidden_states[-1]          # (1, seq_len, hidden_size)
+        # 对最后一层隐藏状态在 token 维度做均值池化
+        hidden = outputs.hidden_states[-1]           # (1, seq_len, hidden_size)
         embedding = hidden.mean(dim=1).cpu().numpy()[0]  # (hidden_size,)
 
     return embedding
@@ -54,31 +52,30 @@ def robustness_score(
     device: str = "cpu",
 ) -> float:
     """
-    Compute the robustness score R(V(T)) per Formula (1).
+    按公式 (1) 计算鲁棒性分数 R(V(T))。
 
     Parameters
     ----------
     model : PreTrainedModel
-        A text summarization / language model with Dropout layers
-        (e.g. GPT-2, BART, T5). Must be in ``train()`` mode so
-        Dropout is active.
+        带有 Dropout 层的语言模型（如 GPT-2、BART、T5）。
+        需要处于 train() 模式以激活 Dropout。
     tokenizer : PreTrainedTokenizer
     text : str
-        The input data sample T.
+        输入数据样本 T。
     m : int
-        Number of stochastic forward passes (default 3, per paper).
+        随机前向传播次数，默认 3（按论文设定）。
     device : str
-        "cuda" or "cpu".
+        "cuda" 或 "cpu"。
 
     Returns
     -------
     float
-        R(V(T)) ∈ [0, 0.5].
+        R(V(T)) ∈ [0, 0.5]。
     """
     if not text or not text.strip():
         return 0.0
 
-    # Ensure dropout is active
+    # 确保 Dropout 处于激活状态
     was_training = model.training
     model.train()
 
@@ -86,13 +83,13 @@ def robustness_score(
         embeddings = []
         for _ in range(m):
             emb = _extract_embedding(model, tokenizer, text, device)
-            # L2-normalize so Euclidean distances are bounded in [0, 2]
+            # L2 归一化，使欧氏距离有界地落在 [0, 2] 范围内
             norm = np.linalg.norm(emb)
             if norm > 0:
                 emb = emb / norm
             embeddings.append(emb)
 
-        # Compute pairwise Euclidean distances
+        # 计算两两之间的欧氏距离
         distances = []
         for i in range(m):
             for j in range(i + 1, m):
@@ -101,10 +98,8 @@ def robustness_score(
 
         avg_distance = np.mean(distances) if distances else 0.0
 
-        # Formula (1): R(V(T)) = σ( − avg_distance )
-        # Note: paper defines σ on the scaled negative mean.
-        # The coefficient 2/(m(m-1)) is absorbed by taking the mean
-        # of pairwise distances, so the argument is simply ( − avg_distance ).
+        # 公式 (1): R(V(T)) = σ( − avg_distance )
+        # 取均值即已将系数 2/(m(m−1)) 吸收，因此 sigmoid 参数为 −avg_distance
         score = 1.0 / (1.0 + np.exp(avg_distance))
         return float(score)
     finally:
