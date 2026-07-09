@@ -8,27 +8,23 @@
 
 ## 方法概述
 
-TDQE 通过两个维度评估文本数据被语言模型理解的程度。
+### 语义一致性检测 — 鲁棒性（论文 Section 2.1）
 
-### 语义一致性检测 — 鲁棒性 R(V(T))（论文 Section 2.1）
+利用文本摘要生成模型的 Dropout 生成 m = 3 个随机子网络，提取多个嵌入表示，通过嵌入向量间的平均欧氏距离衡量鲁棒性。鲁棒性指标 R(V(T)) 定义为（论文公式 1）：
 
-利用文本摘要生成模型的 Dropout 生成 m = 3 个随机子网络，提取多个嵌入表示 {v₁, v₂, ..., vₘ}，通过嵌入向量间的平均欧氏距离衡量鲁棒性：
-
-$$
-R(V(T)) = \sigma\left(-\frac{2}{m(m-1)}\sum_{i<j} d(v_i, v_j)\right)
-$$
+![Formula 1](https://latex.codecogs.com/svg.latex?R(V(T))=\sigma\left(-\frac{2}{m(m-1)}\sum_{i\lt%20j}d(v_i,v_j)\right))
 
 其中 d(·,·) 为欧氏距离，σ(·) 为 Sigmoid 函数，确保 R ∈ [0, 0.5]。
 
-### 匹配度检测 — 准确性 M(T,S)（论文 Section 2.2）
+### 匹配度检测 — 准确性（论文 Section 2.2）
 
 利用文本相似匹配模型计算数据样本 T 与其模型生成的摘要 S 之间的匹配度，评估模型理解的准确程度。M(T,S) ∈ [0, 0.5]。
 
-### 质量评估 Q(T)（论文 Section 2.3）
+### 质量评估（论文 Section 2.3）
 
-$$
-Q(T) = R(V(T)) + M(T, S)
-$$
+质量分数 Q(T) 为鲁棒性与准确性之和（论文公式 2）：
+
+![Formula 2](https://latex.codecogs.com/svg.latex?Q(T)=R(V(T))+M(T,S))
 
 Q(T) ∈ [0, 1.0]，分数越高表示文本越适合用于语言模型训练。
 
@@ -48,12 +44,12 @@ Q(T) ∈ [0, 1.0]，分数越高表示文本越适合用于语言模型训练。
 ```
 ├── tdqe/                     # 核心 Python 包
 │   ├── __init__.py           # 公共接口
-│   ├── config.py             # 论文参数常量
-│   ├── robustness.py         # 语义一致性检测
-│   ├── accuracy.py           # 匹配度检测
-│   ├── quality.py            # 质量分数聚合
-│   ├── data.py               # 20NG 数据集加载
-│   └── experiment.py         # 分类器验证实验
+│   ├── config.py             # 论文参数常量（Table 1）
+│   ├── robustness.py         # 语义一致性检测（Section 2.1）
+│   ├── accuracy.py           # 匹配度检测（Section 2.2）
+│   ├── quality.py            # 质量分数聚合（Section 2.3）
+│   ├── data.py               # 20NG 数据集加载（Section 3.1）
+│   └── experiment.py         # 分类器验证实验（Section 3.3–3.5）
 ├── TDQE_All_In_One.ipynb     # 完整流水线 Notebook
 ├── requirements.txt
 └── README.md
@@ -90,7 +86,7 @@ for cat in fetch_20newsgroups(subset="all").target_names:
             f.write(f"Newsgroup: {cat}\n")
             f.write(f"document_id: {i}\n")
             f.write(text + "\n\n")
-    print(f"  ✓ {cat}")
+    print(f"  Done: {cat}")
 ```
 
 **方法二：从 Kaggle 手动下载**
@@ -110,6 +106,7 @@ jupyter notebook TDQE_All_In_One.ipynb
 ```
 
 按顺序执行所有 Cell 即可完成：
+
 1. 自动下载并加载模型
 2. 加载数据集
 3. 计算 TDQE 质量分数
@@ -121,10 +118,10 @@ jupyter notebook TDQE_All_In_One.ipynb
 
 | 代码模块 | 论文章节 | 说明 |
 |---|---|---|
-| `tdqe/robustness.py` | Section 2.1 | Formula (1): Dropout m=3 次前向传播，欧氏距离均值 |
-| `tdqe/accuracy.py` | Section 2.2 | 文本-摘要嵌入余弦相似度，缩放到 [0, 0.5] |
-| `tdqe/quality.py` | Section 2.3 | Formula (2): Q(T) = R + M |
-| `tdqe/data.py` | Section 3.1 | 20NG 数据集加载，8:2 划分 |
+| `tdqe/robustness.py` | Section 2.1 | 鲁棒性：m=3 次 Dropout 前向传播，嵌入向量欧氏距离均值 |
+| `tdqe/accuracy.py` | Section 2.2 | 准确性：文本与摘要嵌入的余弦相似度，缩放到 [0, 0.5] |
+| `tdqe/quality.py` | Section 2.3 | Q(T) = R(V(T)) + M(T,S) |
+| `tdqe/data.py` | Section 3.1 | 20NG 数据集加载，8:2 训练/测试划分 |
 | `tdqe/experiment.py` | Section 3.3–3.5 | 数据删除实验、消融实验 |
 | `tdqe/config.py` | Table 1 | m=3, max_len=512, epochs=10, batch=8, lr=0.01 |
 
@@ -132,7 +129,7 @@ jupyter notebook TDQE_All_In_One.ipynb
 
 1. Longpre S, et al. *A pretrainer's guide to training data.* NAACL, 2024.
 2. Ferdowsi H, et al. *An online outlier identification and removal scheme.* IEEE TNNLS, 2014.
-3. Frénay B, Verleysen M. *Classification in the presence of label noise.* IEEE TNNLS, 2014.
+3. Frenay B, Verleysen M. *Classification in the presence of label noise.* IEEE TNNLS, 2014.
 4. Schoch S, et al. *CS-SHAPLEY.* NeurIPS, 2022.
 5. Ghorbani A, Zou J. *Data Shapley.* ICML, 2019.
 6. Yoon J, et al. *DVRL.* ICML, 2020.
