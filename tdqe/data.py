@@ -33,33 +33,40 @@ def _extract_articles(file_path: str) -> List[str]:
     """
     Extract individual news articles from a 20NG text file.
 
-    Each file contains articles separated by blank lines, with each
-    article starting with header lines like:
-
-        Newsgroup: <category>
-        document_id: <id>
-        From: ...
-        Subject: ...
+    Articles are separated by ``\\nNewsgroup:``. Some FAQ or long-form
+    posts reference inline ``Newsgroup:`` lines which the splitter
+    would fragment. We check lengths — split fragments shorter than
+    30 words are merged back into the preceding article so FAQ posts
+    (like ``alt.atheism`` FAQ) stay as one coherent unit.
     """
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         content = f.read()
 
-    # Split on blank lines that separate articles.
-    # The 20NG "by date" format uses blank lines between articles.
-    raw_articles = re.split(r"\n\s*\n", content)
+    # Split on article boundary marker
+    parts = ("\n" + content).split("\nNewsgroup:")
 
-    articles = []
-    for art in raw_articles:
-        art = art.strip()
-        # Filter out articles that are too short or are just headers
-        if len(art) < 100:
+    raw = []
+    for part in parts:
+        art = part.strip()
+        if not art:
             continue
-        # Must have a Newsgroup: header
         if not art.startswith("Newsgroup:"):
-            continue
-        articles.append(art)
+            art = "Newsgroup:" + art
+        raw.append(art)
 
-    return articles
+    # Merge tiny fragments back — they are inline ``Newsgroup:``
+    # references inside a longer article, not real article boundaries.
+    articles = []
+    for art in raw:
+        wc = len(art.split())
+        if wc < 30 and articles:
+            # Merge into previous article
+            articles[-1] = articles[-1] + "\n" + art
+        else:
+            articles.append(art)
+
+    # Final length filter
+    return [a for a in articles if len(a) >= 100]
 
 
 def load_20ng(data_dir: str) -> Tuple[List[str], List[int], List[str]]:

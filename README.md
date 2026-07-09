@@ -8,25 +8,27 @@
 
 ## 方法概述
 
+TDQE 通过两个维度评估文本数据被语言模型理解的程度。
+
 ### 语义一致性检测 — 鲁棒性（论文 Section 2.1）
 
-利用文本摘要生成模型的 Dropout 生成 m = 3 个随机子网络，提取多个嵌入表示，通过嵌入向量间的平均欧氏距离衡量鲁棒性。鲁棒性指标 R(V(T)) 定义为（论文公式 1）：
+利用文本摘要生成模型的 Dropout 生成 $m = 3$ 个随机子网络，提取多个嵌入表示，通过嵌入向量间的平均欧氏距离衡量鲁棒性。鲁棒性指标 $R(V(T))$ 定义为（论文公式 1）：
 
-![Formula 1](https://latex.codecogs.com/svg.latex?R(V(T))=\sigma\left(-\frac{2}{m(m-1)}\sum_{i\lt%20j}d(v_i,v_j)\right))
+$$R(V(T)) = \sigma\left(-\frac{2}{m(m-1)}\sum_{i<j} d(v_i, v_j)\right)$$
 
-其中 d(·,·) 为欧氏距离，σ(·) 为 Sigmoid 函数，确保 R ∈ [0, 0.5]。
+其中 $d(\cdot,\cdot)$ 为欧氏距离，$\sigma(\cdot)$ 为 Sigmoid 函数，确保 $R \in [0, 0.5]$。
 
 ### 匹配度检测 — 准确性（论文 Section 2.2）
 
-利用文本相似匹配模型计算数据样本 T 与其模型生成的摘要 S 之间的匹配度，评估模型理解的准确程度。M(T,S) ∈ [0, 0.5]。
+利用文本相似匹配模型计算数据样本 $T$ 与其模型生成的摘要 $S$ 之间的匹配度 $M(T,S)$，以此评估模型理解的准确程度。$M(T,S) \in [0, 0.5]$。
 
 ### 质量评估（论文 Section 2.3）
 
-质量分数 Q(T) 为鲁棒性与准确性之和（论文公式 2）：
+质量分数 $Q(T)$ 为鲁棒性与准确性之和（论文公式 2）：
 
-![Formula 2](https://latex.codecogs.com/svg.latex?Q(T)=R(V(T))+M(T,S))
+$$Q(T) = R(V(T)) + M(T, S)$$
 
-Q(T) ∈ [0, 1.0]，分数越高表示文本越适合用于语言模型训练。
+$Q(T) \in [0, 1.0]$，分数越高表示文本越适合用于语言模型训练。
 
 ---
 
@@ -99,7 +101,9 @@ for cat in fetch_20newsgroups(subset="all").target_names:
 
 ### 3. 运行
 
-模型（distilgpt2）会在首次运行时从 Hugging Face Hub 自动下载，无需手动准备。
+本项目默认使用 **distilgpt2** 作为基础模型。该模型满足 TDQE 框架的三个必要条件：(1) 含有 Dropout 层（embd/attn/resid dropout 均为 0.1），支持生成随机子网络以计算鲁棒性；(2) 输出隐藏状态用于提取嵌入向量；(3) 具备文本生成能力用于产生摘要计算准确性。论文指出 TDQE 框架是模型无关的（Section 2.3），不同结构的模型不会对质量评分排名产生明显影响。
+
+模型会在首次运行时从 Hugging Face Hub 自动下载（约 330 MB），无需手动准备。
 
 ```bash
 jupyter notebook TDQE_All_In_One.ipynb
@@ -118,12 +122,12 @@ jupyter notebook TDQE_All_In_One.ipynb
 
 | 代码模块 | 论文章节 | 说明 |
 |---|---|---|
-| `tdqe/robustness.py` | Section 2.1 | 鲁棒性：m=3 次 Dropout 前向传播，嵌入向量欧氏距离均值 |
-| `tdqe/accuracy.py` | Section 2.2 | 准确性：文本与摘要嵌入的余弦相似度，缩放到 [0, 0.5] |
-| `tdqe/quality.py` | Section 2.3 | Q(T) = R(V(T)) + M(T,S) |
-| `tdqe/data.py` | Section 3.1 | 20NG 数据集加载，8:2 训练/测试划分 |
+| `tdqe/robustness.py` | Section 2.1 | 鲁棒性：$m=3$ 次 Dropout 前向传播，嵌入向量欧氏距离均值 |
+| `tdqe/accuracy.py` | Section 2.2 | 准确性：文本与摘要嵌入的余弦相似度，缩放到 $[0, 0.5]$ |
+| `tdqe/quality.py` | Section 2.3 | $Q(T) = R(V(T)) + M(T,S)$ |
+| `tdqe/data.py` | Section 3.1 | 20NG 数据集加载，$8:2$ 训练/测试划分 |
 | `tdqe/experiment.py` | Section 3.3–3.5 | 数据删除实验、消融实验 |
-| `tdqe/config.py` | Table 1 | m=3, max_len=512, epochs=10, batch=8, lr=0.01 |
+| `tdqe/config.py` | Table 1 | $m=3$, max_len=512, epochs=10, batch=8, lr=0.01 |
 
 ## 参考文献
 
