@@ -1,0 +1,4 @@
+distilgpt2/
+archive/
+*.xlsx
+.ipynb_checkpoints/
